@@ -1,0 +1,6 @@
+marker-pdf==1.*   # For high-fidelity PDF extraction
+neo4j==5.*        # Official Neo4j driver
+pydantic==2.*     # Data validation and schema
+fastapi==0.110.*  # API framework
+uvicorn           # ASGI server
+pdfplumber==0.10.3 # Optional, for simpler PDF tables33
