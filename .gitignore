@@ -57,6 +57,8 @@ third_party/
 # Neo4j
 data/
 logs/
+neo4j/
+*.neo4j
 
 # Models and large files
 *.model
@@ -65,9 +67,33 @@ logs/
 *.pkl
 *.pt
 *.pth
+models/downloads/
+checkpoints/
+
+# PDF processing outputs
+output/
+processed/
+extracted/
+*.pdf.txt
+*.pdf.json
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 *.temp
+
+# Testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
