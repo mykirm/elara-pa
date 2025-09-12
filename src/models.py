@@ -9,18 +9,18 @@ import re
 
 class AuthRequirement(str, Enum):
     """Types of authorization requirements."""
-    REQUIRED = "required"
-    NOT_REQUIRED = "not_required"
-    CONDITIONAL = "conditional"
-    NOTIFICATION_ONLY = "notification_only"
+    REQUIRED = "REQUIRED"
+    NOT_REQUIRED = "NOT_REQUIRED"
+    CONDITIONAL = "CONDITIONAL"
+    NOTIFICATION_ONLY = "NOTIFICATION_ONLY"
 
 
 class RuleType(str, Enum):
     """Types of prior-authorization rules."""
-    CPT_BASED = "cpt_based"
-    ICD_BASED = "icd_based"
-    COMBINATION = "combination"
-    NARRATIVE = "narrative"
+    CPT_BASED = "CPT_BASED"
+    DIAGNOSIS_BASED = "DIAGNOSIS_BASED"  # Changed from ICD_BASED
+    COMBINATION = "COMBINATION"
+    SERVICE_BASED = "SERVICE_BASED"  # Changed from NARRATIVE
 
 
 class Payer(BaseModel):
@@ -28,7 +28,9 @@ class Payer(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     
     name: str = Field(..., min_length=1, description="Payer name (e.g., UnitedHealthcare)")
+    code: Optional[str] = Field(None, description="Payer code (e.g., UHC)")
     payer_id: Optional[str] = Field(None, description="Unique payer identifier")
+    states_covered: List[str] = Field(default_factory=list, description="States where payer operates")
     effective_date: Optional[date] = Field(None, description="Policy effective date")
     
     # Provenance
@@ -41,6 +43,7 @@ class Category(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     
     name: str = Field(..., min_length=1, description="Category name (e.g., Radiology, Cardiology)")
+    code: Optional[str] = Field(None, description="Category code (e.g., RAD, CARD)")
     parent_category: Optional[str] = Field(None, description="Parent category if hierarchical")
     description: Optional[str] = Field(None, description="Category description")
     
@@ -56,6 +59,7 @@ class Service(BaseModel):
     name: str = Field(..., min_length=1, description="Service name")
     description: Optional[str] = Field(None, description="Service description")
     category: Optional[str] = Field(None, description="Service category")
+    typical_cpt_codes: List[str] = Field(default_factory=list, description="Typical CPT codes for this service")
     
     # Provenance
     source_page: Optional[int] = Field(None, description="Page number in source document")
@@ -163,7 +167,7 @@ class State(BaseModel):
         }
         
         if v not in valid_states and v != 'ALL':
-            raise ValueError(f"Invalid state code: {v}")
+            raise ValueError(f"Invalid US state code: {v}")
         
         return v
 
@@ -208,6 +212,10 @@ class Rule(BaseModel):
     applicable_plans: List[str] = Field(default_factory=list, description="Specific plans this applies to")
     
     # Additional requirements
+    age_min: Optional[int] = Field(None, ge=0, description="Minimum age requirement")
+    age_max: Optional[int] = Field(None, ge=0, description="Maximum age requirement")
+    quantity_limit: Optional[int] = Field(None, ge=1, description="Quantity limit")
+    time_period_days: Optional[int] = Field(None, ge=1, description="Time period in days for limits")
     age_restrictions: Optional[Dict[str, Any]] = Field(None, description="Age-based restrictions")
     quantity_limits: Optional[Dict[str, Any]] = Field(None, description="Quantity/frequency limits")
     clinical_criteria: Optional[str] = Field(None, description="Clinical requirements narrative")
@@ -217,16 +225,27 @@ class Rule(BaseModel):
     requires_llm_processing: bool = Field(False, description="Flag for complex narrative rules")
     
     # Provenance and metadata
-    source_file: str = Field(..., description="Source PDF file")
-    source_page: int = Field(..., description="Page number in source")
+    source_file: str = Field(default="unknown.pdf", description="Source PDF file")
+    source_page: int = Field(default=1, description="Page number in source")
     source_line: Optional[int] = Field(None, description="Line number on page")
     extraction_timestamp: datetime = Field(default_factory=datetime.now)
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Extraction confidence")
     
     # Additional metadata
+    created_at: datetime = Field(default_factory=datetime.now, description="Rule creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.now, description="Rule last update timestamp")
     effective_date: Optional[date] = Field(None, description="Rule effective date")
     expiration_date: Optional[date] = Field(None, description="Rule expiration date")
     last_updated: Optional[date] = Field(None, description="Last update date")
+    
+    @field_validator('age_max')
+    @classmethod
+    def validate_age_max(cls, v, info):
+        """Validate that age_max >= age_min if both provided."""
+        if v is not None and info.data.get('age_min') is not None:
+            if v < info.data['age_min']:
+                raise ValueError("age_min must be less than or equal to age_max")
+        return v
     
     def __str__(self) -> str:
         """String representation for debugging."""
@@ -235,28 +254,41 @@ class Rule(BaseModel):
     
     def to_hyperedge(self) -> Dict[str, Any]:
         """Convert rule to hyperedge representation for graph database."""
+        nodes = []
+        
+        # Add CPT nodes
+        nodes.extend([f"CPT:{code}" for code in self.cpt_codes])
+        
+        # Add ICD nodes
+        nodes.extend([f"ICD:{code}" for code in self.icd_codes])
+        
+        # Add payer node
+        nodes.append(f"PAYER:{self.payer}")
+        
+        # Add category node if present
+        if self.category:
+            nodes.append(f"CATEGORY:{self.category}")
+        
+        # Add service node if present
+        if self.service:
+            nodes.append(f"SERVICE:{self.service}")
+        
+        # Add state nodes
+        nodes.extend([f"STATE_EXCLUDED:{state}" for state in self.excluded_states])
+        nodes.extend([f"STATE_INCLUDED:{state}" for state in self.included_states])
+        
         return {
             'id': self.rule_id or f"{self.payer}_{self.category}_{'-'.join(self.cpt_codes[:3])}",
-            'type': 'authorization_rule',
-            'auth_requirement': self.auth_requirement.value,
-            'nodes': {
-                'payer': self.payer,
-                'category': self.category,
-                'service': self.service,
-                'cpt_codes': self.cpt_codes,
-                'icd_codes': self.icd_codes,
-                'states': self.excluded_states + self.included_states,
-                'plans': self.applicable_plans
-            },
+            'edge_type': 'AUTHORIZATION_RULE',
+            'nodes': nodes,
             'properties': {
+                'auth_requirement': self.auth_requirement.value,
                 'clinical_criteria': self.clinical_criteria,
                 'age_restrictions': self.age_restrictions,
                 'quantity_limits': self.quantity_limits,
                 'effective_date': self.effective_date.isoformat() if self.effective_date else None,
-                'source': {
-                    'file': self.source_file,
-                    'page': self.source_page,
-                    'line': self.source_line
-                }
+                'source_file': self.source_file,
+                'source_page': self.source_page,
+                'source_line': self.source_line
             }
         }

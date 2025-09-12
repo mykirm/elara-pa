@@ -28,6 +28,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+marker_env/
 
 # IDE
 .vscode/

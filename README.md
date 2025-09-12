@@ -1,137 +1,172 @@
-# Prior Authorization Hypergraph System
+# PA Hypergraph System
 
-A Python/Neo4j system for parsing prior-authorization policies from insurers and modeling them as hypergraphs to enable intelligent querying and analysis.
+A Python/Neo4j system for parsing prior-authorization (PA) policies from insurance providers and modeling them as a hypergraph for efficient querying and analysis.
 
-## 🏗️ Architecture
+## 🎯 Purpose
 
-This system uses a modular architecture to transform unstructured insurance documents into queryable knowledge graphs:
+This system extracts structured authorization rules from insurance PDFs and models them as hypergraphs where:
+- **Nodes**: CPT codes, ICD codes, states, payers, services
+- **Hyperedges**: Authorization requirements connecting multiple nodes
+
+## 📁 Project Structure
 
 ```
 pa-hypergraph-system/
-├── ingestion/       # PDF parsing and normalization
-├── models/          # Pydantic data models for rules and entities
-├── hypergraphs/     # Graph construction and Neo4j integration
-├── api/             # FastAPI endpoints for CRUD operations
-├── tests/           # Unit and integration tests
-└── third_party/     # External dependencies (HyperGraphRAG)
+├── src/                        # Core source code
+│   ├── __init__.py
+│   ├── models.py              # Pydantic models for PA entities
+│   ├── parsers/               # PDF parsing modules
+│   │   ├── __init__.py
+│   │   ├── uhc_parser.py      # UHC-specific PDF extraction
+│   │   └── uhc_parser_rules.py # Rule parsing logic
+│   ├── hypergraphs/           # Hypergraph operations
+│   │   └── __init__.py
+│   └── connectors/            # Database connectors (future)
+├── scripts/                    # Executable scripts
+│   └── process_pa_document.py # Main processing pipeline
+├── tests/                      # Test suites
+│   ├── integration/           # End-to-end tests
+│   │   ├── test_extraction_only.py
+│   │   ├── test_marker_5_pages.py
+│   │   └── test_rule_parsing_*.py
+│   └── unit/                  # Unit tests (future)
+├── data/                       # Data directory
+│   ├── raw/                   # Raw extracted content
+│   └── processed/             # Processed rules and summaries
+├── third_party/               # External dependencies
+│   └── HyperGraphRAG/         # Cloned hypergraph library
+├── marker_env/                # Virtual environment for marker-pdf
+├── requirements.txt           # Python dependencies
+└── README.md                  # This file
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Python 3.11+
-- Neo4j Database
-- Git
+- Neo4j 5.0+ (for hypergraph storage)
+- 2.5GB disk space (for marker models)
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/mykirm/elara-pa.git
-   cd elara-pa
-   ```
-
-2. **Set up virtual environment**
-   ```bash
-   python3.11 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Set up Neo4j**
-   - Install Neo4j Desktop or use Neo4j Aura
-   - Create a new database
-   - Note connection details for configuration
-
-## 📦 Core Dependencies
-
-- **marker-pdf** - High-fidelity PDF extraction and processing
-- **neo4j** - Official Neo4j Python driver for graph database operations
-- **pydantic** - Data validation and schema definition
-- **fastapi** - Modern API framework for building endpoints
-- **uvicorn** - ASGI server for running the API
-- **pdfplumber** - Alternative PDF processing for tables and structured data
-
-## 🧩 Components
-
-### Ingestion Pipeline
-Processes insurance PDF documents using deterministic parsing with LLM fallback:
-- Text extraction and normalization
-- Table detection and processing
-- Rule identification and structuring
-
-### Data Models
-Pydantic schemas for representing:
-- Prior authorization rules
-- Medical conditions and procedures
-- Coverage criteria and requirements
-- Entity relationships
-
-### Hypergraph Construction
-Transforms parsed rules into Neo4j graph structures:
-- Multi-dimensional relationships between entities
-- Complex rule dependencies and conditions
-- Hierarchical policy structures
-
-### API Layer
-RESTful endpoints for:
-- Document upload and processing
-- Rule querying and retrieval
-- Graph visualization data
-- System health and metrics
-
-## 🔧 Development
-
-### Running Tests
+1. **Clone the repository**:
 ```bash
-pytest tests/
+git clone <repo-url>
+cd pa-hypergraph-system
 ```
 
-### Starting the API Server
+2. **Set up marker environment**:
 ```bash
-uvicorn api.main:app --reload
+python3.11 -m venv marker_env
+source marker_env/bin/activate
+pip install marker-pdf pdfplumber
 ```
 
-### Code Style
-This project follows Python best practices:
-- Type hints throughout
-- Pydantic models for data validation
-- Comprehensive error handling
-- Inline documentation
+3. **Install core dependencies**:
+```bash
+pip install -r requirements.txt
+```
 
-## 🎯 Goals
+### Basic Usage
 
-1. **Deterministic Parsing** - Use regex and structured extraction where possible
-2. **LLM Integration** - Leverage language models only for complex, ambiguous content
-3. **Graph Relationships** - Model complex rule dependencies as hypergraph structures
-4. **Query Interface** - Provide intuitive APIs for rule discovery and analysis
-5. **Extensibility** - Support multiple insurance providers and policy formats
+Process a PA document:
+```bash
+python scripts/process_pa_document.py data/UHC-Commercial-PA-Requirements-2025.pdf
+```
 
-## 📈 Roadmap
+Use pdfplumber instead of marker:
+```bash
+python scripts/process_pa_document.py data/document.pdf --use-pdfplumber
+```
 
-- [ ] Core data models implementation
-- [ ] PDF ingestion pipeline
-- [ ] Neo4j graph construction
-- [ ] HyperGraphRAG integration
-- [ ] RESTful API endpoints
-- [ ] Web interface for visualization
-- [ ] Multi-provider support
+## 🔧 Key Components
+
+### 1. Models (`src/models.py`)
+
+Pydantic models with validation for:
+- `Rule`: Core authorization rule entity
+- `CPTCode`: Validated CPT/HCPCS codes
+- `ICDCode`: ICD-10 diagnosis codes
+- `AuthRequirement`: REQUIRED, CONDITIONAL, NOT_REQUIRED, NOTIFICATION_ONLY
+
+### 2. Parsers (`src/parsers/`)
+
+**Marker Integration** (Recommended):
+- High-quality PDF → Markdown conversion
+- Preserves table structure (critical for PA docs)
+- 6.6x more content extraction than alternatives
+
+**PDFPlumber Fallback**:
+- Simple text extraction
+- Table detection
+- Used when marker fails
+
+### 3. Rule Extraction
+
+Deterministic parsing using regex for:
+- CPT codes: `\d{5}`
+- HCPCS codes: `[A-V]\d{4}`
+- ICD-10 codes: `[A-Z]\d{2}(\.\d{1,4})?`
+- State codes: `AL|AK|AZ|...`
+
+Complex narratives marked for LLM processing.
+
+## 📊 Comparison: Marker vs PDFPlumber
+
+| Metric | Marker | PDFPlumber |
+|--------|--------|------------|
+| Text Extracted | 62,398 chars | 9,385 chars |
+| Table Rows | 173 | 0 |
+| Structure | Rich Markdown | Plain text |
+| Setup | 2.1GB models | Lightweight |
+| Quality | Production-ready | Basic extraction |
+
+**Recommendation**: Use marker for production. It's essential for cross-payer scalability.
+
+## 🧪 Testing
+
+Run extraction test:
+```bash
+python tests/integration/test_extraction_only.py
+```
+
+Compare parser outputs:
+```bash
+python tests/integration/test_rule_parsing_5page_comparison.py
+```
+
+## 📈 Hypergraph Model
+
+Rules are modeled as hyperedges connecting multiple node types:
+
+```
+Hyperedge: "Arthroscopy Auth Rule"
+  ├── CPT: [29826, 29843, 29871]
+  ├── Payer: UnitedHealthcare
+  ├── Requirement: REQUIRED
+  ├── States: [excluded: TX, FL]
+  └── Category: Orthopedic
+```
+
+## 🔮 Future Enhancements
+
+- [ ] Neo4j integration for hypergraph storage
+- [ ] LLM integration for complex narrative parsing
+- [ ] Support for Anthem, Aetna, Cigna PDFs
+- [ ] REST API for rule queries
+- [ ] Automated PDF monitoring and updates
+
+## 📝 License
+
+[Your License Here]
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes with tests
+3. Add tests for new functionality
 4. Submit a pull request
 
-## 📄 License
+## 📧 Contact
 
-This project is part of a research initiative for improving healthcare prior authorization processes.
-
----
-
-*Built with Python 3.11, Neo4j, and modern ML/NLP tools*
