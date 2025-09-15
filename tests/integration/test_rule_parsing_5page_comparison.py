@@ -9,7 +9,7 @@ from datetime import datetime
 # Add marker_env to path
 sys.path.insert(0, '/Users/myrakirmani/Desktop/PA/pa-hypergraph-system/marker_env/lib/python3.11/site-packages')
 
-from src.parsers.uhc_parser_rules import parse_markdown_to_rules
+from src.parsers.payer_rules.uhc_rules import parse_markdown_to_rules
 
 def test_5page_rule_parsing_comparison():
     """Test rule parsing with both marker and pdfplumber on first 5 pages only."""

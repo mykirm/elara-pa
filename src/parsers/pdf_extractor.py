@@ -1,7 +1,7 @@
-"""UnitedHealthcare Prior Authorization PDF Parser.
+"""Generic PDF extraction module for prior authorization documents.
 
-This module handles the extraction and parsing of prior-authorization rules
-from UnitedHealthcare PDF documents using marker-pdf and pdfplumber.
+This module provides generic PDF extraction capabilities that can be used
+for any payer's documents using marker-pdf and pdfplumber.
 """
 
 import re
@@ -16,26 +16,24 @@ import hashlib
 # Add marker_env to path for imports
 sys.path.insert(0, '/Users/myrakirmani/Desktop/PA/pa-hypergraph-system/marker_env/lib/python3.11/site-packages')
 
-# Import marker-pdf components
-from marker.converters.pdf import PdfConverter
-from marker.settings import Settings
+# Try to import marker-pdf components (optional, will fallback to pdfplumber)
+try:
+    from marker.converters.pdf import PdfConverter
+    from marker.settings import Settings
+    MARKER_AVAILABLE = True
+except ImportError:
+    MARKER_AVAILABLE = False
 
 # Import pdfplumber for table extraction fallback
 import pdfplumber
 
-# Import our models
-from src.models import (
-    Rule, RuleType, AuthRequirement,
-    CPTCode, ICDCode, State, 
-    Payer, Category, Service
-)
 
-
-def convert_pdf_to_markdown(file_path: str) -> str:
+def convert_pdf_to_markdown(file_path: str, output_prefix: str = None) -> str:
     """Convert PDF to Markdown using marker-pdf.
     
     Args:
         file_path: Path to the PDF file
+        output_prefix: Optional prefix for output files (e.g., 'uhc', 'anthem')
         
     Returns:
         Markdown text extracted from the PDF
@@ -58,10 +56,15 @@ def convert_pdf_to_markdown(file_path: str) -> str:
     # Create output directory
     os.makedirs("data/raw", exist_ok=True)
     base_name = Path(file_path).stem
+    if output_prefix:
+        base_name = f"{output_prefix}_{base_name}"
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_dir = f"data/raw/{base_name}_{timestamp}_marker"
     
     try:
+        if not MARKER_AVAILABLE:
+            raise ImportError("Marker not available, using fallback")
+        
         # Use marker programmatic API
         sys.path.insert(0, '/Users/myrakirmani/Desktop/PA/pa-hypergraph-system/marker_env/lib/python3.11/site-packages')
         from marker.scripts.convert_single import convert_single_cli
@@ -133,11 +136,12 @@ def convert_pdf_to_markdown(file_path: str) -> str:
             raise RuntimeError(f"Both marker and fallback failed: marker={e}, fallback={fallback_error}")
 
 
-def extract_tables_with_pdfplumber(file_path: str) -> List[Dict[str, Any]]:
+def extract_tables_with_pdfplumber(file_path: str, output_prefix: str = None) -> List[Dict[str, Any]]:
     """Extract tables from PDF using pdfplumber as fallback.
     
     Args:
         file_path: Path to the PDF file
+        output_prefix: Optional prefix for output files (e.g., 'uhc', 'anthem')
         
     Returns:
         List of extracted tables with metadata
@@ -184,6 +188,8 @@ def extract_tables_with_pdfplumber(file_path: str) -> List[Dict[str, Any]]:
     # Save extracted tables for debugging
     if tables_data:
         base_name = Path(file_path).stem
+        if output_prefix:
+            base_name = f"{output_prefix}_{base_name}"
         tables_output_path = f"data/raw/{base_name}_tables.json"
         with open(tables_output_path, 'w', encoding='utf-8') as f:
             json.dump(tables_data, f, indent=2)
@@ -192,3 +198,30 @@ def extract_tables_with_pdfplumber(file_path: str) -> List[Dict[str, Any]]:
     return tables_data
 
 
+def extract_pdf_metadata(file_path: str) -> Dict[str, Any]:
+    """Extract metadata from PDF file.
+    
+    Args:
+        file_path: Path to the PDF file
+        
+    Returns:
+        Dictionary containing PDF metadata
+    """
+    metadata = {
+        'file_path': file_path,
+        'file_name': Path(file_path).name,
+        'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+        'extraction_timestamp': datetime.now().isoformat()
+    }
+    
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            metadata.update({
+                'num_pages': len(pdf.pages),
+                'pdf_metadata': pdf.metadata if pdf.metadata else {}
+            })
+    except Exception as e:
+        print(f"Error extracting PDF metadata: {e}")
+        metadata['error'] = str(e)
+    
+    return metadata

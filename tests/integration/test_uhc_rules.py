@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).parent))
 
 # Import our modules
 from models.entities import Rule, AuthRequirement, RuleType
-from src.parsers.uhc_parser_rules import (
+from src.parsers.payer_rules.uhc_rules import (
     parse_markdown_to_rules,
     merge_related_rules,
     get_llm_prompt
