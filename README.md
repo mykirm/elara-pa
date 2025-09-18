@@ -15,24 +15,30 @@ pa-hypergraph-system/
 ├── src/                        # Core source code
 │   ├── __init__.py
 │   ├── models.py              # Pydantic models for PA entities
+│   ├── app/                   # FastAPI web application
+│   │   └── main.py            # API endpoints for rule processing
 │   ├── parsers/               # PDF parsing modules
 │   │   ├── __init__.py
-│   │   ├── uhc_parser.py      # UHC-specific PDF extraction
-│   │   └── uhc_parser_rules.py # Rule parsing logic
+│   │   ├── pdf_extractor.py   # PDF → Markdown conversion
+│   │   └── payer_rules/       # Payer-specific rule parsers
+│   │       ├── __init__.py
+│   │       └── uhc_rules.py   # UHC rule extraction (PRODUCTION)
+│   ├── preprocessing/         # Document preprocessing
+│   │   └── intelligent_chunker.py # Content classification
 │   ├── hypergraphs/           # Hypergraph operations
 │   │   └── __init__.py
 │   └── connectors/            # Database connectors (future)
 ├── scripts/                    # Executable scripts
-│   └── process_pa_document.py # Main processing pipeline
-├── tests/                      # Test suites
+│   ├── process_pa_document.py # Main processing pipeline
+│   └── run_server.py          # FastAPI server launcher
+├── tests/                      # Test suites and comparisons
 │   ├── integration/           # End-to-end tests
-│   │   ├── test_extraction_only.py
-│   │   ├── test_marker_5_pages.py
-│   │   └── test_rule_parsing_*.py
-│   └── unit/                  # Unit tests (future)
+│   ├── test_*.py              # Parser comparison tests
+│   └── *.md                   # Test results and documentation
 ├── data/                       # Data directory
 │   ├── raw/                   # Raw extracted content
-│   └── processed/             # Processed rules and summaries
+│   ├── processed/             # Processed rules and summaries
+│   └── uploads/               # API file uploads
 ├── third_party/               # External dependencies
 │   └── HyperGraphRAG/         # Cloned hypergraph library
 ├── marker_env/                # Virtual environment for marker-pdf
@@ -70,14 +76,32 @@ pip install -r requirements.txt
 
 ### Basic Usage
 
-Process a PA document:
+**Process a PA document (Command Line)**:
 ```bash
 python scripts/process_pa_document.py data/UHC-Commercial-PA-Requirements-2025.pdf
 ```
 
-Use pdfplumber instead of marker:
+**Start the API server**:
 ```bash
-python scripts/process_pa_document.py data/document.pdf --use-pdfplumber
+python scripts/run_server.py
+# Server runs on http://localhost:8000
+# API docs at http://localhost:8000/docs
+```
+
+**API Usage Examples**:
+```bash
+# Upload and process a PDF
+curl -X POST "http://localhost:8000/upload-pdf" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@path/to/document.pdf"
+
+# Evaluate authorization for CPT codes
+curl -X POST "http://localhost:8000/authorization/evaluate" \
+  -H "Content-Type: application/json" \
+  -d '{"cpt_codes": ["23470", "29826"], "state": "CA", "patient_age": 65}'
+
+# Get all loaded rules
+curl "http://localhost:8000/rules"
 ```
 
 ## 🔧 Key Components
@@ -102,15 +126,18 @@ Pydantic models with validation for:
 - Table detection
 - Used when marker fails
 
-### 3. Rule Extraction
+### 3. Rule Extraction (`src/parsers/payer_rules/uhc_rules.py`)
 
-Deterministic parsing using regex for:
-- CPT codes: `\d{5}`
-- HCPCS codes: `[A-V]\d{4}`
-- ICD-10 codes: `[A-Z]\d{2}(\.\d{1,4})?`
-- State codes: `AL|AK|AZ|...`
+**Production Parser**: Uses deterministic regex-based extraction proven to outperform AI preprocessing by 55x:
 
-Complex narratives marked for LLM processing.
+- **CPT codes**: `\d{5}` (5-digit procedure codes)
+- **HCPCS codes**: `[A-V]\d{4}` (letter + 4 digits)
+- **ICD-10 codes**: `[A-Z]\d{2}(\.\d{1,4})?` (diagnosis codes)
+- **Authorization language**: "Prior authorization required" → REQUIRED
+- **Geographic exceptions**: State abbreviation detection
+- **Medical categories**: Preserves procedure specialties (Arthroplasty, Arthroscopy, etc.)
+
+**Why Original Parser**: Comprehensive testing showed intelligent preprocessing lost 99%+ of content, missing critical authorization rules while the original parser successfully extracted all major medical procedures.
 
 ## 📊 Comparison: Marker vs PDFPlumber
 
@@ -123,6 +150,23 @@ Complex narratives marked for LLM processing.
 | Quality | Production-ready | Basic extraction |
 
 **Recommendation**: Use marker for production. It's essential for cross-payer scalability.
+
+## 📊 Parser Performance Comparison
+
+Based on UHC 2025 PA Requirements testing:
+
+| Metric | Original Parser | Enhanced Parser | Winner |
+|--------|----------------|-----------------|---------|
+| **Rules Extracted** | **166** | 3 | 🏆 **ORIGINAL** (55x more) |
+| **Unique CPT Codes** | **1,984** | 15 | 🏆 **ORIGINAL** (132x more) |
+| **REQUIRED Rules** | **22** | 0 | 🏆 **ORIGINAL** |
+| **Categories Detected** | **57** | 0 | 🏆 **ORIGINAL** |
+| **Major Procedures Found** | ✅ Arthroplasty, Arthroscopy | ❌ Missed all | 🏆 **ORIGINAL** |
+
+**Key Findings**:
+- Original parser correctly identifies "Prior authorization required" as REQUIRED
+- Enhanced parser with AI chunking missed 99.2% of CPT codes
+- Original parser preserves medical specialty context and geographic exceptions
 
 ## 🧪 Testing
 

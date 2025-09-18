@@ -6,7 +6,11 @@ from typing import List, Dict, Any
 from datetime import datetime
 
 # Import our models
-from src.models import Rule, RuleType, AuthRequirement
+try:
+    from src.models import Rule, RuleType, AuthRequirement
+except ImportError:
+    # When running from FastAPI context
+    from models import Rule, RuleType, AuthRequirement
 
 
 def parse_markdown_to_rules(markdown_text: str, source_file: str = "unknown.pdf") -> List[Rule]:

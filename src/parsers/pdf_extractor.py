@@ -13,18 +13,20 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, date
 import hashlib
 
-# Add marker_env to path for imports
-sys.path.insert(0, '/Users/myrakirmani/Desktop/PA/pa-hypergraph-system/marker_env/lib/python3.11/site-packages')
-
 # Try to import marker-pdf components (optional, will fallback to pdfplumber)
+# Only use marker if explicitly needed and environment is set up
+MARKER_AVAILABLE = False
 try:
-    from marker.converters.pdf import PdfConverter
-    from marker.settings import Settings
-    MARKER_AVAILABLE = True
+    # Only try marker if we're explicitly in the marker environment
+    marker_env_path = '/Users/myrakirmani/Desktop/PA/pa-hypergraph-system/marker_env/lib/python3.11/site-packages'
+    if marker_env_path in sys.path:
+        from marker.converters.pdf import PdfConverter
+        from marker.settings import Settings
+        MARKER_AVAILABLE = True
 except ImportError:
     MARKER_AVAILABLE = False
 
-# Import pdfplumber for table extraction fallback
+# Import pdfplumber for table extraction fallback (from main environment)
 import pdfplumber
 
 
@@ -66,7 +68,6 @@ def convert_pdf_to_markdown(file_path: str, output_prefix: str = None) -> str:
             raise ImportError("Marker not available, using fallback")
         
         # Use marker programmatic API
-        sys.path.insert(0, '/Users/myrakirmani/Desktop/PA/pa-hypergraph-system/marker_env/lib/python3.11/site-packages')
         from marker.scripts.convert_single import convert_single_cli
         
         # Save original sys.argv

@@ -1,0 +1,99 @@
+{
+  "test_cases": {
+    "state_exceptions": {
+      "input": "\n        ### Arthroscopy\n        Prior authorization required for all states.\n        \n        Additional codes with site of service review except in Alaska, Massachusetts, Puerto Rico, Rhode Island, Texas, Utah, the Virgin Islands and Wisconsin:\n        29805, 29806, 29807, 29819, 29820, 29821\n        ",
+      "rules_found": 1,
+      "expected_excluded_states": [
+        "AK",
+        "MA",
+        "PR",
+        "RI",
+        "TX",
+        "UT",
+        "VI",
+        "WI"
+      ],
+      "actual_excluded_states": [],
+      "manual_verification": "Check if Alaska, Massachusetts, Puerto Rico, Rhode Island, Texas, Utah, Virgin Islands, Wisconsin are detected as excluded"
+    },
+    "diagnosis_exceptions": {
+      "input": "\n        ### Breast reconstruction (non-mastectomy)\n        Prior authorization required.\n        \n        CPT Codes: 15771, 19300, 19316, 19318\n        \n        Notification/prior authorization NOT required for the following diagnosis codes:\n        C50.019, C50.011, C50.012, C50.111\n        C50.411, C50.412, C50.419, C50.511\n        ",
+      "rules_found": 1,
+      "expected_icd_codes": [
+        "C50.019",
+        "C50.011",
+        "C50.012",
+        "C50.111",
+        "C50.411",
+        "C50.412",
+        "C50.419",
+        "C50.511"
+      ],
+      "actual_icd_codes": [],
+      "manual_verification": "Check if breast cancer diagnosis codes are extracted and marked as exceptions"
+    },
+    "complex_authorization": {
+      "input": "\n        ### Bariatric surgery\n        Prior authorization required.\n        Center of Excellence requirement for coverage.\n        In certain situations, bariatric surgery isn't covered by some benefit plans.\n        \n        CPT Codes: 43644, 43645, 43659, 43770, 43771\n        \n        Notification/prior authorization required for diagnosis codes:\n        E66.01, E66.09, E66.1-E66.3, E66.8, E66.9, Z68.1, Z68.20-Z68.22\n        ",
+      "rules_found": 1,
+      "expected_clinical_criteria": "Center of Excellence",
+      "actual_clinical_criteria": null,
+      "manual_verification": "Check if Center of Excellence requirement is captured"
+    },
+    "full_document": {
+      "total_rules": 5,
+      "total_chunks": 8,
+      "chunk_distribution": {
+        "context_info": 2,
+        "authorization_rule": 5,
+        "geographic_exception": 1
+      },
+      "sample_rules": [
+        {
+          "service": "CPT Codes:",
+          "cpt_count": 28,
+          "auth_requirement": "CONDITIONAL"
+        },
+        {
+          "service": "CPT Codes requiring PA:",
+          "cpt_count": 15,
+          "auth_requirement": "CONDITIONAL"
+        },
+        {
+          "service": "Additional codes with site of service review (except Alaska, Massachusetts, Puerto Rico, Rhode Island, Texas, Utah, Virgin Islands, Wisconsin):",
+          "cpt_count": 15,
+          "auth_requirement": "CONDITIONAL"
+        },
+        {
+          "service": "CPT Codes:",
+          "cpt_count": 12,
+          "auth_requirement": "CONDITIONAL"
+        },
+        {
+          "service": "CPT Codes:",
+          "cpt_count": 8,
+          "auth_requirement": "CONDITIONAL"
+        }
+      ]
+    }
+  },
+  "verification_guide": {
+    "cpt_codes": "\n            Manual Verification for CPT Codes:\n            1. Check UHC PDF pages 1-32 for procedure codes\n            2. Verify 5-digit numeric codes are captured (e.g., 23470, 27447)\n            3. Ensure codes in table format are extracted correctly\n            4. Look for missing codes in multi-column layouts\n            ",
+    "state_exceptions": "\n            Manual Verification for State Exceptions:\n            1. Search PDF for text like \"except in [states]\" or \"excluding [states]\"\n            2. Look for phrases like \"all states except\" or \"limited to\"\n            3. Verify state abbreviations are correctly identified\n            4. Check geographic restriction patterns\n            ",
+    "authorization_types": "\n            Manual Verification for Authorization Types:\n            1. Look for \"Prior authorization required\" \u2192 REQUIRED\n            2. Look for \"No prior authorization\" \u2192 NOT_REQUIRED  \n            3. Look for \"Notification only\" \u2192 NOTIFICATION_ONLY\n            4. Complex cases may need \u2192 CONDITIONAL\n            ",
+    "diagnosis_codes": "\n            Manual Verification for Diagnosis Codes:\n            1. Look for ICD-10 patterns (letter + 2 digits + optional decimal)\n            2. Check \"diagnosis codes\" sections in procedures\n            3. Verify exception lists (\"NOT required for...\")\n            4. Look for ranges like \"E66.1-E66.3\"\n            ",
+    "special_requirements": "\n            Manual Verification for Special Requirements:\n            1. Look for \"Center of Excellence\" requirements\n            2. Check for network restrictions\n            3. Find coverage limitations or exclusions\n            4. Identify site-of-service requirements\n            "
+  },
+  "extraction_comparison": {
+    "enhanced": {
+      "rules_count": 1,
+      "chunks_created": 1,
+      "cpt_codes_found": 12,
+      "context_preserved": true
+    },
+    "basic": {
+      "rules_count": 1,
+      "cpt_codes_found": 12,
+      "line_by_line": true
+    }
+  }
+}
